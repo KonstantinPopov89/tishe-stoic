@@ -39,7 +39,7 @@ feed.innerHTML=visible.map(renderCard).join('')+`<section class="slide end-card"
 activeIndex=Math.max(0,visible.findIndex(c=>c.id===target));fitCards();feed.scrollTop=feed.children[activeIndex].offsetTop;lastPositionOffset=0;updateActive(activeIndex);
 // Scroll position is the source of truth, including cards taller than a viewport.
 }
-function fitCards(){feed.style.setProperty('--feed-height',feed.clientHeight+'px');feed.querySelectorAll('.slide.tall').forEach(e=>e.classList.remove('tall'));feed.querySelectorAll('.slide .card').forEach(e=>{if(e.scrollHeight>e.clientHeight+1)e.parentElement.classList.add('tall')})}
+function fitCards(){feed.style.setProperty('--feed-height',feed.clientHeight+'px');feed.querySelectorAll('.slide.tall').forEach(e=>e.classList.remove('tall'));const tall=[...feed.querySelectorAll('.slide .card')].filter(e=>e.scrollHeight>e.clientHeight+1);tall.forEach(e=>e.parentElement.classList.add('tall'))}
 let scrollFrame,resizePending=false,lastPositionOffset=0;
 function positionIndex(){const slides=[...feed.querySelectorAll('.slide')];let i=0;for(let n=0;n<slides.length;n++){if(slides[n].offsetTop<=feed.scrollTop+feed.clientHeight*.4)i=n;else break}return i}
 feed.addEventListener('scroll',()=>{if(scrollFrame||resizePending)return;scrollFrame=requestAnimationFrame(()=>{scrollFrame=null;if(resizePending)return;const i=positionIndex();if(i<visible.length&&i!==activeIndex)updateActive(i);else if(i===visible.length)activeIndex=i;lastPositionOffset=Math.max(0,feed.scrollTop-(feed.children[i]?.offsetTop||0))})},{passive:true});
