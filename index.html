@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101217"><meta name="description" content="Стоицизм в живых карточках. Идеи книги Массимо Пильюччи, визуальные модели, ситуации и вопросы для себя.">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Тише. Стоицизм в карточках</title>
+<link rel="apple-touch-icon" href="assets/icon-180.png"><meta name="apple-mobile-web-app-title" content="Тише"><link rel="icon" href="assets/icon.svg" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest">
+<link rel="preload" href="assets/archer.webp" as="image"><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#feed">К карточкам</a>
+<div class="desktop-caption" aria-hidden="true"><div class="wordmark">тише<span>.</span></div><p>Меньше шума.<br>Больше смысла.</p><div class="book-label">МАССИМО ПИЛЬЮЧЧИ<br><b>Как быть стоиком</b></div><div class="side-line"></div><p class="side-small">Одна мысль.<br>Одна новая перспектива.<br>Листайте в своем темпе.</p><span class="keyboard-hint">↑ ↓ &nbsp; или колесо мыши</span></div>
+<main class="app" aria-label="Стоицизм в карточках">
+<header class="topbar"><button class="brand" id="home" aria-label="Вернуться в ленту">тише<span>.</span></button><div class="top-center"><span id="mode-label">ИДЕИ ДЛЯ ЖИЗНИ</span><span id="counter">Загружаем книгу</span></div><button class="icon-button" id="shuffle" aria-label="Перемешать карточки" title="Перемешать"></button></header>
+<div class="progress-track" aria-hidden="true"><i id="progress"></i></div>
+<div id="feed" class="feed" tabindex="0" aria-label="Лента. Листайте вверх или вниз"><div class="loading">Сейчас станет тише.</div></div>
+<nav class="bottom-nav" aria-label="Разделы"><button id="nav-feed" class="nav-button selected" aria-current="page"><span data-icon="layers"></span>Лента</button><button id="nav-topics" class="nav-button"><span data-icon="grid"></span>Темы</button><button id="nav-saved" class="nav-button"><span data-icon="bookmark"></span>Сохранено <i id="saved-count"></i></button><button id="nav-about" class="nav-button"><span data-icon="book"></span>О книге</button></nav>
+</main>
+<aside class="desktop-controls" aria-label="Перелистывание"><button class="round-button" id="prev" aria-label="Предыдущая карточка"></button><button class="round-button" id="next" aria-label="Следующая карточка"></button><span>Листайте<br>дальше</span></aside>
+<dialog id="sheet" aria-labelledby="sheet-title"><div class="sheet-head"><span class="sheet-handle" aria-hidden="true"></span><button id="close-sheet" class="icon-button" aria-label="Закрыть"></button></div><div class="sheet-scroll" id="sheet-content"></div></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<noscript><p>Для карточек и квизов включите JavaScript в браузере.</p></noscript>
+<script src="data.js"></script><script src="app.js"></script>
+</body></html>
