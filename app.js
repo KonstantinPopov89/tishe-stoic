@@ -17,6 +17,48 @@ const valid=new Set(D.cards.map(c=>c.id));state.order=[...new Set((Array.isArray
 state.saved=(Array.isArray(state.saved)?state.saved:[]).filter(id=>valid.has(id));state.seen=(Array.isArray(state.seen)?state.seen:[]).filter(id=>valid.has(id));state.answers=state.answers&&typeof state.answers==='object'?state.answers:{};state.intentions=(Array.isArray(state.intentions)?state.intentions:[]).filter(id=>valid.has(id));for(const id of state.intentions)if(!state.saved.includes(id))state.saved.push(id);if(!topics[state.topic])state.topic='all';if(!['feed','saved'].includes(state.mode))state.mode='feed';
 state.revealed=(Array.isArray(state.revealed)?state.revealed:[]).filter(id=>valid.has(id));
 const map=new Map(D.cards.map(c=>[c.id,c]));let visible=[],activeIndex=0,observer=null,restoreFocus=null,toastTimer=null,storageWarned=false;
+// Each collection remembers the last card read there.
+const positionKey=()=>state.mode==='saved'?'saved':'feed:'+state.topic;
+if(!state.positions||typeof state.positions!=='object'||Array.isArray(state.positions))state.positions={};
+if(valid.has(state.current))state.positions[positionKey()]=state.current;
+
+function openCollection(mode,topic,target){
+  state.mode=mode;
+  state.topic=topic;
+  const remembered=target||state.positions[positionKey()];
+  state.current=valid.has(remembered)?remembered:null;
+  render(state.current);
+  persist();
+}
+
+function localDay(date=new Date()){
+  return [date.getFullYear(),date.getMonth()+1,date.getDate()].join('-');
+}
+function refreshIntentions(){
+  const day=localDay();
+  if(state.intentionDay===day)return;
+  state.intentionDay=day;
+  state.intentions=[];
+  feed.querySelectorAll('[data-action="intend"][aria-pressed="true"]').forEach(button=>{
+    button.setAttribute('aria-pressed','false');
+    button.textContent='Хочу попробовать сегодня';
+  });
+  persist();
+}
+let dayTimer;
+function watchDay(){
+  clearTimeout(dayTimer);
+  refreshIntentions();
+  const now=new Date();
+  const midnight=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
+  dayTimer=setTimeout(watchDay,midnight-now+50);
+}
+
+function cardCount(n){
+  const last=n%10, tens=n%100;
+  const form=tens>=11&&tens<=14?'карточек':last===1?'карточка':last>=2&&last<=4?'карточки':'карточек';
+  return n+' '+form;
+}
 function persist(){try{localStorage.setItem(STORE,JSON.stringify(state))}catch{if(!storageWarned){toast('Браузер не разрешил сохранение прогресса');storageWarned=true}}}
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.classList.remove('show'),2400)}
 function svgVisual(c){const k=c.visual;let v='';
@@ -36,9 +78,9 @@ function storyReveal(c){const open=state.revealed.includes(c.id);const i=visible
 function renderCard(c){const saved=state.saved.includes(c.id),answered=Number.isInteger(state.answers[c.id]);const isQ=['quiz','choice'].includes(c.kind);const intent=state.intentions.includes(c.id);const isReveal=!!c.reveal_text;
 return `<section class="slide" data-card-id="${esc(c.id)}" aria-label="${esc(c.title)}"><article class="card ${esc(c.theme||'paper')} ${esc(c.kind)} ${answered?'has-answer':''} ${isReveal?'has-reveal':''}"><div class="eyebrow"><span>${shortTopics[c.topic]||'СТОИЦИЗМ'}</span><span class="kind">${c.practice_number?'ПРАКТИКА '+c.practice_number:(kinds[c.kind]||'МЫСЛЬ')}</span></div><h2 class="title">${esc(c.title)}</h2><p class="lead">${esc(isQ?(c.scenario||c.lead):c.lead)}</p>${visual(c)}${isQ?`<div class="quiz-area"><h3 class="quiz-question">${esc(c.question||c.title)}</h3>${quiz(c)}</div>`:c.kind==='practice'?`<ol class="practice-steps">${(c.preview_steps||c.steps||[]).map((s,i)=>`<li><i>${i+1}</i><span>${esc(s)}</span></li>`).join('')}</ol><button class="practice-done" data-action="intend" data-id="${c.id}" aria-pressed="${intent}">${intent?'Выбрано на сегодня ✓':'Хочу попробовать сегодня'}</button>`:isReveal?`<div class="story-reveal">${storyReveal(c)}</div>`:`<p class="card-body">${esc(c.body)}</p>`}<div class="card-tail">${!isQ&&!isReveal&&c.kind!=='practice'?`<p class="takeaway">${esc(c.takeaway)}</p>`:''}<div class="card-actions"><button class="action-primary" data-action="details" data-id="${c.id}">${icon('arrow')}<span>${isReveal?'Контекст и источник':'Разобраться'}</span></button><button class="secondary-action save-button ${saved?'saved':''}" data-action="save" data-id="${c.id}" aria-pressed="${saved}" aria-label="${saved?'Убрать из сохраненного':'Сохранить карточку'}">${icon('bookmark')}</button></div><div class="origin-row"><span>${esc(c.origin==='Пересказ книги'?'ПО КНИГЕ ПИЛЬЮЧЧИ':'СИТУАЦИЯ ПО МОТИВАМ КНИГИ')}</span><button class="chapter-button" data-action="source" data-id="${c.id}">${c.chapter===15?'Приложение':'Глава '+c.chapter} ↗</button></div></div></article></section>`;}
 function setNav(){['feed','saved'].forEach(m=>{const e=$('#nav-'+m);e.classList.toggle('selected',state.mode===m);if(state.mode===m)e.setAttribute('aria-current','page');else e.removeAttribute('aria-current')});$('#saved-count').textContent=state.saved.length||'';$('#mode-label').textContent=state.mode==='saved'?'СОХРАНЕННОЕ':state.topic==='all'?'ИДЕИ ДЛЯ ЖИЗНИ':topics[state.topic].toUpperCase()}
-function updateActive(i){if(i<0||i>=visible.length)return;activeIndex=i;state.current=visible[i].id;if(!state.seen.includes(state.current))state.seen.push(state.current);$('#counter').textContent=`${i+1} / ${visible.length}`;$('#progress').style.width=((i+1)/visible.length*100)+'%';feed.querySelectorAll('.slide').forEach(el=>el.classList.toggle('active',el.dataset.cardId===state.current));persist();const next=visible[i+1];if(next&&['archer','marble','storm','hourglass'].includes(next.visual)){const im=new Image();im.src='assets/'+(next.visual==='storm'?'marble':next.visual)+'.webp'} }
+function updateActive(i){if(i<0||i>=visible.length)return;activeIndex=i;state.current=visible[i].id;state.positions[positionKey()]=state.current;if(!state.seen.includes(state.current))state.seen.push(state.current);$('#counter').textContent=`${i+1} / ${visible.length}`;$('#progress').style.width=((i+1)/visible.length*100)+'%';feed.querySelectorAll('.slide').forEach(el=>el.classList.toggle('active',el.dataset.cardId===state.current));persist();const next=visible[i+1];if(next&&['archer','marble','storm','hourglass'].includes(next.visual)){const im=new Image();im.src='assets/'+(next.visual==='storm'?'marble':next.visual)+'.webp'} }
 function render(target=state.current){if(observer)observer.disconnect();visible=state.order.map(id=>map.get(id)).filter(c=>c&&(state.mode!=='saved'||state.saved.includes(c.id))&&(state.topic==='all'||(state.topic==='practice'?c.kind==='practice':c.topic===state.topic)));setNav();if(!visible.length){feed.innerHTML=`<div class="empty"><div>${icon('bookmark')}</div><h2>${state.mode==='saved'?'Здесь будут твои закладки':'Здесь пока тихо'}</h2><p>${state.mode==='saved'?'Нажми на закладку под карточкой, чтобы вернуться к ней позже.':'Выбери другую тему или вернись в ленту.'}</p><button class="action-primary" data-action="all">Вернуться в ленту</button></div>`;$('#counter').textContent='';$('#progress').style.width='0%';return}
-feed.innerHTML=visible.map(renderCard).join('')+`<section class="slide end-card" data-end="true"><span class="chapter-name">${visible.length} КАРТОЧЕК В ЭТОЙ ПОДБОРКЕ</span><h2>Мысли закончились.<br>Жизнь продолжается.</h2><p>Можно вернуться к сохраненному, выбрать другую тему или посмотреть на знакомые идеи в новом порядке.</p><button class="action-primary" data-action="reshuffle">Еще круг, в другом порядке ${icon('shuffle')}</button><button class="secondary-action" data-action="topics">Выбрать тему</button></section>`;
+feed.innerHTML=visible.map(renderCard).join('')+`<section class="slide end-card" data-end="true"><span class="chapter-name">${cardCount(visible.length).toUpperCase()} В ЭТОЙ ПОДБОРКЕ</span><h2>Мысли закончились.<br>Жизнь продолжается.</h2><p>Можно вернуться к сохраненному, выбрать другую тему или посмотреть на знакомые идеи в новом порядке.</p><button class="action-primary" data-action="reshuffle">Еще круг, в другом порядке ${icon('shuffle')}</button><button class="secondary-action" data-action="topics">Выбрать тему</button></section>`;
 activeIndex=Math.max(0,visible.findIndex(c=>c.id===target));fitCards();feed.scrollTop=feed.children[activeIndex].offsetTop;lastPositionOffset=0;updateActive(activeIndex);
 // Scroll position is the source of truth, including cards taller than a viewport.
 }
@@ -51,17 +93,52 @@ function move(delta){const i=Math.max(0,Math.min(visible.length,positionIndex()+
 function openSheet(html){restoreFocus=document.activeElement;$('#sheet-content').innerHTML=html;sheet.showModal();$('#sheet-content').scrollTop=0;document.body.classList.add('paused');$('#close-sheet').focus()}
 function closeSheet(){sheet.close()}
 sheet.addEventListener('close',()=>{document.body.classList.remove('paused');if(restoreFocus?.isConnected)restoreFocus.focus({preventScroll:true})});sheet.addEventListener('click',e=>{if(e.target===sheet){const r=sheet.getBoundingClientRect();if(e.clientY<r.top||e.clientX<r.left||e.clientX>r.right)closeSheet()}});$('#close-sheet').onclick=closeSheet;
-function sources(c){return (c.source_ids||[]).map(id=>{const s=D.refs[id];if(!s)return '';return `<div class="source-item"><span class="quote-label">${esc(s.speaker)}</span><p>${esc(s.claim)}</p>${s.support?`<blockquote>${esc(s.support)}</blockquote>`:''}<details><summary>Где найти в электронной книге</summary><code>${esc(s.locator)}</code><p class="small">${esc(id)}. Здесь указаны файл и абзац в электронной книге.</p></details></div>`}).join('')}
-function showDetails(id,sourceOnly=false){const c=map.get(id);if(!c)return;openSheet(`<div class="chapter-name">${c.chapter===15?'Приложение':'Глава '+c.chapter} · ${esc(D.chapters[c.chapter]||'')}</div><h2 id="sheet-title">${sourceOnly?'Источник в книге':esc(c.title)}</h2>${!sourceOnly?`${c.scenario?`<div class="quote-label">Редакционная ситуация</div><p>${esc(c.scenario)}</p>`:''}<p>${esc(c.details)}</p>${c.steps?.length?`<h3>Шаг за шагом</h3><ol class="detail-steps">${c.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>`:''}<h3>Главная мысль</h3><p>${esc(c.takeaway)}</p>`:''}<h3>Откуда эта мысль</h3><p class="small">Массимо Пильюччи, "Как быть стоиком. Античная философия и современная жизнь". Ниже можно сверить пересказ с короткими отрывками из книги.</p>${sources(c)}<p class="small">${esc(c.origin)}. Иллюстрации сделаны для ленты. Исторические и научные сведения приведены по книге.</p>`)}
-function showTopics(){openSheet(`<h2 id="sheet-title">Что сейчас ближе?</h2><p class="small">Выбери тему или открой все карточки.</p><div class="topics-grid">${Object.entries(topics).map(([id,name])=>`<button class="topic-tile ${state.topic===id?'active':''}" data-topic="${id}">${esc(name)}<span>${id==='all'?D.cards.length:D.cards.filter(c=>id==='practice'?c.kind==='practice':c.topic===id).length} карточек</span></button>`).join('')}</div>`)}
+function sources(c){
+  return (c.source_ids||[]).map(id=>{
+    const ref=D.refs[id];
+    if(!ref)return '';
+    const section=ref.chapter===15?'Приложение':'Глава '+ref.chapter;
+    const place=ref.figure?'рисунок '+ref.figure:'абзац '+ref.paragraph;
+    const label=ref.figure?'Слова рядом с рисунком':'Слова для поиска в книге';
+    return `<div class="source-item">
+      <span class="quote-label">${esc(ref.speaker)}</span>
+      <p>${esc(ref.claim)}</p>
+      <details><summary>${esc(section)} · ${esc(place)}</summary>
+        <p class="search-words">${label}<br><strong>${esc(ref.search)}</strong></p>
+      </details></div>`;
+  }).join('');
+}
+async function shareCard(c,button){
+  const url=new URL(location.protocol==='file:'?'https://konstantinpopov89.github.io/tishe-stoic/':location.href);
+  url.search='';
+  url.hash=c.id;
+  if(navigator.share){
+    try{await navigator.share({title:c.title,url:url.href});return}
+    catch(error){if(error.name==='AbortError')return}
+  }
+  try{await navigator.clipboard.writeText(url.href);button.textContent='Ссылка скопирована';return}catch{}
+  let input=button.parentElement.querySelector('.card-link');
+  if(!input){
+    input=document.createElement('input');
+    input.className='card-link';
+    input.readOnly=true;
+    input.setAttribute('aria-label','Ссылка на карточку');
+    button.after(input);
+  }
+  input.value=url.href;
+  input.focus();
+  input.select();
+}
+function showDetails(id,sourceOnly=false){const c=map.get(id);if(!c)return;const shareButton=`<div class="share-card"><button type="button" class="sheet-button" data-action="share" data-id="${esc(c.id)}">Поделиться карточкой</button></div>`;openSheet(`<div class="chapter-name">${c.chapter===15?'Приложение':'Глава '+c.chapter} · ${esc(D.chapters[c.chapter]||'')}</div><h2 id="sheet-title">${sourceOnly?'Источник в книге':esc(c.title)}</h2>${!sourceOnly?`${c.scenario?`<div class="quote-label">Редакционная ситуация</div><p>${esc(c.scenario)}</p>`:''}<p>${esc(c.details)}</p>${c.steps?.length?`<h3>Шаг за шагом</h3><ol class="detail-steps">${c.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>`:''}<h3>Главная мысль</h3><p>${esc(c.takeaway)}</p>`:''}${sourceOnly?'':shareButton+'<h3>Откуда эта мысль</h3>'}<p class="small">Массимо Пильюччи, "Как быть стоиком. Античная философия и современная жизнь". Здесь краткий пересказ. Открой номер абзаца или рисунка, чтобы увидеть слова для поиска в русском издании.</p>${sources(c)}${sourceOnly?shareButton:''}<p class="small">${esc(c.origin)}. Иллюстрации сделаны для ленты. Исторические и научные сведения приведены по книге.</p>`)}
+function showTopics(){openSheet(`<h2 id="sheet-title">Что сейчас ближе?</h2><p class="small">Выбери тему или открой все карточки.</p><div class="topics-grid">${Object.entries(topics).map(([id,name])=>`<button class="topic-tile ${state.topic===id?'active':''}" data-topic="${id}">${esc(name)}<span>${cardCount(id==='all'?D.cards.length:D.cards.filter(c=>id==='practice'?c.kind==='practice':c.topic===id).length)}</span></button>`).join('')}</div>`)}
 function showAboutContent(){const html=aboutHTML();$('#sheet-content').innerHTML=html}function showAbout(){openSheet(aboutHTML())}function aboutHTML(){
   return `<span class="chapter-name">ТИШЕ · ЛЕНТА ПО КНИГЕ</span>
   <h2 id="sheet-title">Как пользоваться лентой</h2>
   <p>Листай истории и упражнения из книги Массимо Пильюччи "Как быть стоиком". В квизах можно выбрать ответ или сразу перейти дальше.</p>
   <p>При первом открытии порядок у всех одинаковый. Чтобы перемешать карточки, нажми на две стрелки вверху.</p>
-  <p>"Разобраться" открывает пояснение. Нажми на номер главы, чтобы увидеть отрывок из книги. В некоторых историях развязку можно открыть прямо на карточке.</p>
+  <p>"Разобраться" открывает пояснение. Нажми на номер главы, чтобы найти нужное место в книге. В пояснении есть кнопка "Поделиться карточкой". В некоторых историях развязку можно открыть прямо на карточке.</p>
   <h3>Как вернуться к карточке</h3>
-  <p>Нажми на закладку и ищи карточку в разделе "Сохранено". Кнопка "Хочу попробовать сегодня" тоже ставит закладку. Если передумаешь, можешь снять только отметку на сегодня или убрать саму закладку.</p>
+  <p>Нажми на закладку и ищи карточку в разделе "Сохранено". Кнопка "Хочу попробовать сегодня" тоже ставит закладку. Завтра отметка исчезнет, а упражнение останется в сохраненном. Вернуться на прежнее место чтения можно кнопкой "Лента".</p>
   <p>Все упражнения собраны в разделе "Темы" под названием "Попробовать сегодня".</p>
   <h3>Размер текста</h3>
   <button class="sheet-button" data-action="large-text" aria-pressed="${!!state.largeText}">${state.largeText?'Обычный текст':'Увеличить текст'}</button>
@@ -78,13 +155,25 @@ function showAboutContent(){const html=aboutHTML();$('#sheet-content').innerHTML
 
 function shuffle(){for(let i=state.order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[state.order[i],state.order[j]]=[state.order[j],state.order[i]]}state.current=null;persist();render(null);toast('Карточки перемешаны')}
 function save(id){const at=state.saved.indexOf(id);if(at<0){state.saved.push(id);toast('Сохранено. Можно вернуться в любой момент')}else{state.saved.splice(at,1);state.intentions=state.intentions.filter(x=>x!==id);feed.querySelectorAll(`[data-action="intend"][data-id="${id}"]`).forEach(e=>{e.setAttribute('aria-pressed','false');e.textContent='Хочу попробовать сегодня'});toast('Убрано из сохраненного')}persist();if(state.mode==='saved')render(visible[activeIndex+1]?.id||visible[activeIndex-1]?.id);else{feed.querySelectorAll(`[data-action="save"][data-id="${id}"]`).forEach(e=>{const yes=state.saved.includes(id);e.classList.toggle('saved',yes);e.setAttribute('aria-pressed',yes);e.setAttribute('aria-label',yes?'Убрать из сохраненного':'Сохранить карточку')});setNav()}}
-document.addEventListener('click',e=>{const topic=e.target.closest('[data-topic]');if(topic){state.topic=topic.dataset.topic;state.mode='feed';state.current=null;persist();closeSheet();render(null);return}const el=e.target.closest('[data-action]');if(!el)return;const id=el.dataset.id,c=map.get(id);switch(el.dataset.action){case'details':showDetails(id);break;case'source':showDetails(id,true);break;case'save':save(id);break;case'skip':move(1);break;case'topics':showTopics();break;case'answer':{const i=Number(el.dataset.choice);state.answers[id]=i;persist();const card=el.closest('.card');card.classList.add('has-answer');card.querySelector('.quiz-area').innerHTML=`<h3 class="quiz-question">${esc(c.question||c.title)}</h3>${quiz(c)}`;fitCards();card.querySelector(`[data-choice="${i}"]`)?.focus({preventScroll:true});break}case'diagram':{const n=Number(el.dataset.node);el.closest('.diagram-nodes').querySelectorAll('button').forEach((x,i)=>x.setAttribute('aria-pressed',i===n));el.closest('.diagram-box').querySelector('.diagram-detail').textContent=c.diagram.nodes[n].detail;fitCards();break}case'reveal':{const i=state.revealed.indexOf(id);if(i<0)state.revealed.push(id);else state.revealed.splice(i,1);persist();const box=el.closest('.story-reveal');box.innerHTML=storyReveal(c);fitCards();box.querySelector('[data-action=reveal]').focus({preventScroll:true});break}case'intend':{const i=state.intentions.indexOf(id);if(i<0){state.intentions.push(id);if(!state.saved.includes(id))state.saved.push(id);const saveButton=el.closest('.card').querySelector('[data-action=save]');saveButton.classList.add('saved');saveButton.setAttribute('aria-pressed','true');saveButton.setAttribute('aria-label','Убрать из сохраненного');toast('Практика добавлена в сохраненное')}else{state.intentions.splice(i,1);toast('Отметка снята. Закладка сохранена')}const yes=i<0;el.setAttribute('aria-pressed',yes);el.textContent=yes?'Выбрано на сегодня ✓':'Хочу попробовать сегодня';persist();setNav();break}case'all':state.mode='feed';state.topic='all';render();break;case'reshuffle':shuffle();break;case'large-text':state.largeText=!state.largeText;document.body.classList.toggle('large-text',state.largeText);persist();render();showAboutContent();$('#sheet-content [data-action=large-text]')?.focus({preventScroll:true});break;case'export':{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({...state,exported_at:new Date().toISOString()},null,2)],{type:'application/json'}));a.download='tishe-moe-chtenie.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);break}}});
-$('#nav-feed').onclick=()=>{state.mode='feed';state.topic='all';render()};$('#home').onclick=$('#nav-feed').onclick;$('#nav-saved').onclick=()=>{state.mode='saved';state.topic='all';render()};$('#nav-topics').onclick=showTopics;$('#nav-about').onclick=showAbout;$('#shuffle').onclick=shuffle;$('#prev').onclick=()=>move(-1);$('#next').onclick=()=>move(1);
+document.addEventListener('click',e=>{const topic=e.target.closest('[data-topic]');if(topic){closeSheet();openCollection('feed',topic.dataset.topic);return}const el=e.target.closest('[data-action]');if(!el)return;const id=el.dataset.id,c=map.get(id);switch(el.dataset.action){case'details':showDetails(id);break;case'source':showDetails(id,true);break;case'save':save(id);break;case'share':shareCard(c,el);break;case'skip':move(1);break;case'topics':showTopics();break;case'answer':{const i=Number(el.dataset.choice);state.answers[id]=i;persist();const card=el.closest('.card');card.classList.add('has-answer');card.querySelector('.quiz-area').innerHTML=`<h3 class="quiz-question">${esc(c.question||c.title)}</h3>${quiz(c)}`;fitCards();card.querySelector(`[data-choice="${i}"]`)?.focus({preventScroll:true});break}case'diagram':{const n=Number(el.dataset.node);el.closest('.diagram-nodes').querySelectorAll('button').forEach((x,i)=>x.setAttribute('aria-pressed',i===n));el.closest('.diagram-box').querySelector('.diagram-detail').textContent=c.diagram.nodes[n].detail;fitCards();break}case'reveal':{const i=state.revealed.indexOf(id);if(i<0)state.revealed.push(id);else state.revealed.splice(i,1);persist();const box=el.closest('.story-reveal');box.innerHTML=storyReveal(c);fitCards();box.querySelector('[data-action=reveal]').focus({preventScroll:true});break}case'intend':{refreshIntentions();const i=state.intentions.indexOf(id);if(i<0){state.intentions.push(id);if(!state.saved.includes(id))state.saved.push(id);const saveButton=el.closest('.card').querySelector('[data-action=save]');saveButton.classList.add('saved');saveButton.setAttribute('aria-pressed','true');saveButton.setAttribute('aria-label','Убрать из сохраненного');toast('Практика добавлена в сохраненное')}else{state.intentions.splice(i,1);toast('Отметка снята. Закладка сохранена')}const yes=i<0;el.setAttribute('aria-pressed',yes);el.textContent=yes?'Выбрано на сегодня ✓':'Хочу попробовать сегодня';persist();setNav();break}case'all':openCollection('feed','all');break;case'reshuffle':shuffle();break;case'large-text':state.largeText=!state.largeText;document.body.classList.toggle('large-text',state.largeText);persist();render();showAboutContent();$('#sheet-content [data-action=large-text]')?.focus({preventScroll:true});break;case'export':{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({...state,exported_at:new Date().toISOString()},null,2)],{type:'application/json'}));a.download='tishe-moe-chtenie.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);break}}});
+$('#nav-feed').onclick=()=>openCollection('feed','all');$('#home').onclick=$('#nav-feed').onclick;$('#nav-saved').onclick=()=>openCollection('saved','all');$('#nav-topics').onclick=showTopics;$('#nav-about').onclick=showAbout;$('#shuffle').onclick=shuffle;$('#prev').onclick=()=>move(-1);$('#next').onclick=()=>move(1);
 document.addEventListener('keydown',e=>{if(sheet.open||e.ctrlKey||e.metaKey||e.altKey||e.target.closest('button,input,textarea,select,a'))return;if(['ArrowDown','PageDown','j',' '].includes(e.key)){e.preventDefault();move(1)}if(['ArrowUp','PageUp','k'].includes(e.key)){e.preventDefault();move(-1)}});
 document.addEventListener('visibilitychange',()=>document.body.classList.toggle('paused',document.hidden||sheet.open));let resizeTimer;window.addEventListener('resize',()=>{resizePending=true;clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{fitCards();const e=feed.children[activeIndex];const maxOffset=Math.max(0,(e?.clientHeight||0)-feed.clientHeight);feed.scrollTop=(e?.offsetTop||0)+Math.min(lastPositionOffset,maxOffset);resizePending=false},160)});
 
-const hash=decodeURIComponent(location.hash.slice(1));if(valid.has(hash))state.current=hash;
-if(D.cards.length)render();else feed.innerHTML='<div class="empty"><h2>Карточки пока не загрузились.</h2><p>Попробуй обновить страницу. Если ты открыл файл с компьютера, положи data.js рядом с index.html.</p></div>';
+function openLinkedCard(){
+  const id=location.hash.slice(1);
+  if(!valid.has(id))return false;
+  if(sheet.open)closeSheet();
+  openCollection('feed','all',id);
+  // Consume the incoming link once; subsequent reloads resume reading.
+  try{history.replaceState(history.state,'',location.pathname+location.search)}catch{}
+  return true;
+}
+window.addEventListener('hashchange',openLinkedCard);
+window.addEventListener('focus',watchDay);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)watchDay()});
+watchDay();
+if(D.cards.length){if(!openLinkedCard())render()}else feed.innerHTML='<div class="empty"><h2>Карточки пока не загрузились.</h2><p>Попробуй обновить страницу. Если ты открыл файл с компьютера, положи data.js рядом с index.html.</p></div>';
 if('serviceWorker' in navigator&&location.protocol!=='file:'){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').then(()=>navigator.serviceWorker.ready).then(()=>{window.__offlineReady=true;const e=$('#offline-state');if(e)e.textContent='Приложение сохранено для работы без сети.'}).catch(()=>{}))}
 window.__stoicQA={getState:()=>({...state,index:activeIndex,visible:visible.map(c=>c.id)}),move,render,showDetails};
 })();
