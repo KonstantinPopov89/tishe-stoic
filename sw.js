@@ -1,4 +1,4 @@
-const CACHE='tishe-705118f06ba1';
+const CACHE='tishe-f8b13f026620';
 const FILES=["./", "./app.js", "./assets/archer.webp", "./assets/hourglass.webp", "./assets/icon-180.png", "./assets/icon-192.png", "./assets/icon-512.png", "./assets/icon.svg", "./assets/marble.webp", "./data.js", "./index.html", "./manifest.webmanifest", "./style.css"];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES))));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('tishe-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
